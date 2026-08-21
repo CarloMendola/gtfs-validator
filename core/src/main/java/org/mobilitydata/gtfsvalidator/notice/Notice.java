@@ -73,10 +73,25 @@ public abstract class Notice {
    * @return notice code, e.g., "foreign_key_violation".
    */
   public static String getCode(Class<?> noticeClass) {
-    return CaseFormat.UPPER_CAMEL.to(
-        CaseFormat.LOWER_UNDERSCORE,
-        StringUtils.removeEnd(noticeClass.getSimpleName(), NOTICE_SUFFIX));
+    return CODE_CACHE.get(noticeClass);
   }
+
+  /**
+   * Notice code per notice class.
+   *
+   * <p>The code only depends on the class, and deriving it builds several intermediate strings. It
+   * is looked up on every notice added to a container and again when notices are grouped, so it is
+   * cached. {@code ClassValue} is thread-safe and does not prevent the class from being unloaded.
+   */
+  private static final ClassValue<String> CODE_CACHE =
+      new ClassValue<>() {
+        @Override
+        protected String computeValue(Class<?> noticeClass) {
+          return CaseFormat.UPPER_CAMEL.to(
+              CaseFormat.LOWER_UNDERSCORE,
+              StringUtils.removeEnd(noticeClass.getSimpleName(), NOTICE_SUFFIX));
+        }
+      };
 
   @Override
   public boolean equals(Object o) {
