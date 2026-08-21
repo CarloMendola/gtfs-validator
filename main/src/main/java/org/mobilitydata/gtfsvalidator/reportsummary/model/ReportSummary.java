@@ -37,14 +37,13 @@ public class ReportSummary {
    */
   @VisibleForTesting static final int MAX_NOTICES_PER_CODE = 50;
 
-  private final NoticeContainer container;
   private final Map<SeverityLevel, Long> severityCounts;
   private final Map<SeverityLevel, Map<String, List<NoticeView>>> noticesMap;
   private final Map<SeverityLevel, Map<String, Integer>> noticeCountPerSeverityAndCode;
+  private final int noticeCount;
   private final VersionInfo versionInfo;
 
   public ReportSummary(NoticeContainer container, VersionInfo versionInfo) {
-    this.container = container;
     this.versionInfo = versionInfo;
     this.severityCounts = new EnumMap<>(SeverityLevel.class);
     // Severity levels are listed from the most to the least severe, notice codes alphabetically.
@@ -52,20 +51,34 @@ public class ReportSummary {
     this.noticeCountPerSeverityAndCode = new EnumMap<>(SeverityLevel.class);
 
     for (ResolvedNotice<ValidationNotice> notice : container.getResolvedValidationNotices()) {
-      SeverityLevel severityLevel = notice.getSeverityLevel();
-      String code = notice.getContext().getCode();
-      severityCounts.merge(severityLevel, 1L, Long::sum);
-      noticeCountPerSeverityAndCode
-          .computeIfAbsent(severityLevel, level -> new TreeMap<>())
-          .merge(code, 1, Integer::sum);
       List<NoticeView> notices =
           noticesMap
-              .computeIfAbsent(severityLevel, level -> new TreeMap<>())
-              .computeIfAbsent(code, noticeCode -> new ArrayList<>());
+              .computeIfAbsent(notice.getSeverityLevel(), level -> new TreeMap<>())
+              .computeIfAbsent(notice.getContext().getCode(), code -> new ArrayList<>());
       if (notices.size() < MAX_NOTICES_PER_CODE) {
         notices.add(new NoticeView(notice));
       }
     }
+
+    // The counts come from the container rather than from the notices above, which are only the
+    // ones the container retained and this summary materialized. The report must show how many
+    // notices the feed actually produced, the same number the JSON report exports.
+    int total = 0;
+    for (Map.Entry<SeverityLevel, Map<String, List<NoticeView>>> bySeverity :
+        noticesMap.entrySet()) {
+      SeverityLevel severityLevel = bySeverity.getKey();
+      Map<String, Integer> countPerCode = new TreeMap<>();
+      long severityCount = 0;
+      for (String code : bySeverity.getValue().keySet()) {
+        int count = container.getNoticeCount(code, severityLevel);
+        countPerCode.put(code, count);
+        severityCount += count;
+      }
+      noticeCountPerSeverityAndCode.put(severityLevel, countPerCode);
+      severityCounts.put(severityLevel, severityCount);
+      total += severityCount;
+    }
+    this.noticeCount = total;
   }
 
   /**
@@ -109,7 +122,7 @@ public class ReportSummary {
    * @return the total count of notices.
    */
   public int getNoticeCount() {
-    return container.getValidationNotices().size();
+    return noticeCount;
   }
 
   /**

@@ -238,6 +238,46 @@ public class NoticeContainerTest {
   }
 
   @Test
+  public void getNoticeCount_countsDroppedNoticesToo() {
+    NoticeContainer container = new NoticeContainer(1_000, 2, 2);
+    for (int i = 0; i < 10; i++) {
+      NoticeContainer rowNotices = new NoticeContainer();
+      rowNotices.addValidationNotice(new StringFieldNotice("value"));
+      container.addAll(rowNotices);
+    }
+
+    assertThat(container.getValidationNotices()).hasSize(2);
+    assertThat(container.getNoticeCount("string_field", SeverityLevel.ERROR)).isEqualTo(10);
+    assertThat(container.getNoticeCount("string_field", SeverityLevel.WARNING)).isEqualTo(0);
+    assertThat(container.getNoticeCount("unknown_file", SeverityLevel.INFO)).isEqualTo(0);
+  }
+
+  /**
+   * A notice type is described in the exported report only if one of its notices was retained, so
+   * reaching the total limit must not make a whole type disappear from the report.
+   */
+  @Test
+  public void addAll_totalLimitReached_stillRetainsTheFirstNoticeOfEachType() {
+    NoticeContainer container = new NoticeContainer(4, 2, 10);
+    NoticeContainer otherContainer = new NoticeContainer();
+    for (int i = 0; i < 3; i++) {
+      otherContainer.addValidationNotice(new MissingRequiredFileNotice("stops.txt"));
+      otherContainer.addValidationNotice(new UnknownFileNotice("unknown.txt"));
+    }
+    otherContainer.addValidationNotice(new DoubleFieldNotice(2.0));
+    container.addAll(otherContainer);
+
+    assertThat(new Gson().toJson(container.exportValidationNotices()))
+        .isEqualTo(
+            "{\"notices\":[{\"code\":\"double_field\",\"severity\":\"ERROR\",\"totalNotices\":1,"
+                + "\"sampleNotices\":[{\"doubleField\":2.0}]},{\"code\":\"missing_required_file\","
+                + "\"severity\":\"ERROR\",\"totalNotices\":3,\"sampleNotices\":[{\"filename\":"
+                + "\"stops.txt\"},{\"filename\":\"stops.txt\"}]},{\"code\":\"unknown_file\","
+                + "\"severity\":\"INFO\",\"totalNotices\":3,\"sampleNotices\":[{\"filename\":"
+                + "\"unknown.txt\"},{\"filename\":\"unknown.txt\"}]}]}");
+  }
+
+  @Test
   public void exportNotices_shouldReflectTheTotalNumberOfNoticesAndContexts() {
     NoticeContainer container = new NoticeContainer(26, 8, 3);
     for (int i = 0; i < 55; i++) {

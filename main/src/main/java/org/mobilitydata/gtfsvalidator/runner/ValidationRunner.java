@@ -21,6 +21,7 @@ import static org.mobilitydata.gtfsvalidator.table.GtfsFeedLoader.SkippedValidat
 import com.google.common.flogger.FluentLogger;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonIOException;
 import java.io.IOException;
 import java.io.Writer;
 import java.net.URI;
@@ -187,7 +188,11 @@ public class ValidationRunner {
       GtfsFeedContainer feedContainer,
       GtfsFeedLoader loader,
       ValidationRunnerConfig config) {
-    printSummary(feedMetadata, feedContainer.tableTotalsText(), loader, config);
+    printSummary(
+        feedMetadata,
+        feedContainer == null ? null : feedContainer.tableTotalsText(),
+        loader,
+        config);
   }
 
   /**
@@ -405,7 +410,9 @@ public class ValidationRunner {
               outputDir.resolve(config.systemErrorsReportFileName()), StandardCharsets.UTF_8)) {
         gson.toJson(noticeContainer.exportSystemErrors(), writer);
       }
-    } catch (IOException e) {
+      // Gson reports a failing writer as a JsonIOException, so it is caught here alongside the
+      // IOException the file operations themselves throw.
+    } catch (IOException | JsonIOException e) {
       logger.atSevere().withCause(e).log("Cannot store report files");
     }
   }

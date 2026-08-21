@@ -134,11 +134,19 @@ public class NoticeContainer {
    * by one and notices merged from another container are treated the same way.
    */
   private boolean canRetain(ResolvedNotice<?> notice) {
-    if (validationNotices.size() >= maxTotalValidationNotices) {
+    String mappingKey = notice.getMappingKey();
+    int retained = retainedNoticesCountPerTypeAndSeverity.getOrDefault(mappingKey, 0);
+    if (retained >= maxValidationNoticesPerTypeAndSeverity) {
       return false;
     }
-    return retainedNoticesCountPerTypeAndSeverity.merge(notice.getMappingKey(), 1, Integer::sum)
-        <= maxValidationNoticesPerTypeAndSeverity;
+    // A notice type is described in the exported report only if at least one of its notices was
+    // retained, so the first notice of a type and severity is kept even once the total limit is
+    // reached: dropping it would hide the type, and its exact count, from the report entirely.
+    if (retained > 0 && validationNotices.size() >= maxTotalValidationNotices) {
+      return false;
+    }
+    retainedNoticesCountPerTypeAndSeverity.put(mappingKey, retained + 1);
+    return true;
   }
 
   public <T extends ValidationNotice> NoticeContainer addValidationNotices(Iterable<T> notices) {
@@ -206,6 +214,18 @@ public class NoticeContainer {
 
   public List<ResolvedNotice<ValidationNotice>> getResolvedValidationNotices() {
     return validationNotices;
+  }
+
+  /**
+   * Returns how many notices of the given code and severity were added to this container.
+   *
+   * <p>This counts every notice the container was given, including the ones it did not retain, and
+   * is the number the validation report exports as {@code totalNotices}. It is therefore what a
+   * report should show, rather than the size of {@link #getResolvedValidationNotices()}.
+   */
+  public int getNoticeCount(String code, SeverityLevel severityLevel) {
+    return noticesCountPerTypeAndSeverity.getOrDefault(
+        ResolvedNotice.mappingKey(code, severityLevel), 0);
   }
 
   /** Returns a list of all validation notices in the container. */

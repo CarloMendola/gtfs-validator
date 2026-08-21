@@ -75,6 +75,24 @@ public class HtmlReportGeneratorTest {
     assertThat(report).doesNotContain("field_120");
   }
 
+  /** The page must report how many notices the feed produced, not how many were kept in memory. */
+  @Test
+  public void generateReport_countsAreExactWhenTheContainerDroppedNotices() throws IOException {
+    NoticeContainer noticeContainer = new NoticeContainer(1_000, 10, 10);
+    for (int i = 1; i <= 300; i++) {
+      noticeContainer.addValidationNotice(
+          new MissingRequiredFieldNotice("test.txt", i, String.format("field_%03d", i)));
+    }
+
+    String report = visibleText(generateReport(noticeContainer));
+
+    assertThat(report).contains("300 notices reported ( 300 errors, 0 warnings, 0 infos)");
+    assertThat(report).contains("missing_required_field ERROR 300");
+    assertThat(report)
+        .contains(
+            "Only the first " + MAX_NOTICES_PER_CODE + " of 300 affected records are displayed");
+  }
+
   @Test
   public void generateReport_fewerNoticesThanTheLimit_listsThemAll() throws IOException {
     NoticeContainer noticeContainer = new NoticeContainer();
