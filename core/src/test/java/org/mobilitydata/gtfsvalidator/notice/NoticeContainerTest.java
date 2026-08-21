@@ -182,6 +182,62 @@ public class NoticeContainerTest {
   }
 
   @Test
+  public void addAll_shouldRespectMaxPerNoticeTypeAndSeverity() {
+    NoticeContainer container = new NoticeContainer(1_000, 5, 5);
+    for (int i = 0; i < 20; i++) {
+      // Reproduces how CsvFileLoader merges one container per parsed row.
+      NoticeContainer rowNotices = new NoticeContainer();
+      rowNotices.addValidationNotice(new DoubleFieldNotice(i));
+      container.addAll(rowNotices);
+    }
+
+    assertThat(container.getValidationNotices()).hasSize(5);
+  }
+
+  @Test
+  public void addAll_shouldRespectMaxTotalValidationNotices() {
+    NoticeContainer container = new NoticeContainer(7, 1_000, 1_000);
+    for (int i = 0; i < 20; i++) {
+      NoticeContainer otherContainer = new NoticeContainer();
+      otherContainer.addValidationNotice(new DoubleFieldNotice(i));
+      otherContainer.addValidationNotice(new StringFieldNotice(Integer.toString(i)));
+      container.addAll(otherContainer);
+    }
+
+    assertThat(container.getValidationNotices()).hasSize(7);
+  }
+
+  @Test
+  public void exportNoticesAfterAddAll_shouldReportExactTotalCountBeyondRetentionLimit() {
+    NoticeContainer container = new NoticeContainer(1_000, 2, 2);
+    for (int i = 0; i < 100; i++) {
+      NoticeContainer rowNotices = new NoticeContainer();
+      rowNotices.addValidationNotice(new StringFieldNotice("value"));
+      container.addAll(rowNotices);
+    }
+
+    assertThat(container.getValidationNotices()).hasSize(2);
+    assertThat(new Gson().toJson(container.exportValidationNotices()))
+        .isEqualTo(
+            "{\"notices\":[{\"code\":\"string_field\",\"severity\":\"ERROR\","
+                + "\"totalNotices\":100,\"sampleNotices\":[{\"someField\":\"value\"},{"
+                + "\"someField\":\"value\"}]}]}");
+  }
+
+  @Test
+  public void addAll_shouldKeepValidationErrorAndWarningFlagsWhenNoticesAreDropped() {
+    NoticeContainer container = new NoticeContainer(0, 0, 0);
+    NoticeContainer otherContainer = new NoticeContainer();
+    otherContainer.addValidationNotice(new MissingRequiredFileNotice("stops.txt"));
+    otherContainer.addValidationNotice(new MissingRecommendedFileNotice("feed_info.txt"));
+    container.addAll(otherContainer);
+
+    assertThat(container.getValidationNotices()).isEmpty();
+    assertThat(container.hasValidationErrors()).isTrue();
+    assertThat(container.hasValidationWarnings()).isTrue();
+  }
+
+  @Test
   public void exportNotices_shouldReflectTheTotalNumberOfNoticesAndContexts() {
     NoticeContainer container = new NoticeContainer(26, 8, 3);
     for (int i = 0; i < 55; i++) {
