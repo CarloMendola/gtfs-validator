@@ -53,6 +53,25 @@ public class NoticeSchemaGenerator {
   private static Gson GSON = new GsonBuilder().create();
 
   /**
+   * Documentation comments per notice class.
+   *
+   * <p>Loading them means opening a resource and parsing JSON, and the HTML report needs the
+   * comments of a notice class once per rendered notice. The result only depends on the class, so
+   * it is cached. {@code ClassValue} is thread-safe and does not prevent the class from being
+   * unloaded.
+   *
+   * <p>The cached instances are shared by all callers and must be treated as read-only, even though
+   * {@link NoticeDocComments} is mutable.
+   */
+  private static final ClassValue<NoticeDocComments> COMMENTS_CACHE =
+      new ClassValue<>() {
+        @Override
+        protected NoticeDocComments computeValue(Class<?> noticeClass) {
+          return loadCommentsUncached(noticeClass);
+        }
+      };
+
+  /**
    * Convenient function to find all notices in given packages and describe their fields.
    *
    * @param packages List of packages where notices are declared
@@ -127,6 +146,10 @@ public class NoticeSchemaGenerator {
   }
 
   public static NoticeDocComments loadComments(Class<?> noticeClass) {
+    return COMMENTS_CACHE.get(noticeClass);
+  }
+
+  private static NoticeDocComments loadCommentsUncached(Class<?> noticeClass) {
     String resourceName = NoticeDocComments.getResourceNameForClass(noticeClass);
     InputStream is = noticeClass.getResourceAsStream(resourceName);
     if (is == null) {
