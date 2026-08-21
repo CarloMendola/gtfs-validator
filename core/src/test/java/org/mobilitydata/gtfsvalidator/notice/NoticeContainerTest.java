@@ -238,6 +238,44 @@ public class NoticeContainerTest {
   }
 
   @Test
+  public void reset_emptiesTheContainerButNotTheOneItWasMergedInto() {
+    NoticeContainer container = new NoticeContainer();
+    NoticeContainer rowNotices = new NoticeContainer();
+    ValidationNotice notice = new MissingRequiredFileNotice("stops.txt");
+    rowNotices.addValidationNotice(notice);
+    rowNotices.addSystemError(
+        new RuntimeExceptionInValidatorError("Validator1", new IllegalStateException("boom")));
+    container.addAll(rowNotices);
+
+    rowNotices.reset();
+
+    assertThat(rowNotices.getValidationNotices()).isEmpty();
+    assertThat(rowNotices.getSystemErrors()).isEmpty();
+    assertThat(rowNotices.hasValidationErrors()).isFalse();
+    assertThat(rowNotices.hasValidationWarnings()).isFalse();
+    assertThat(rowNotices.getNoticeCount("missing_required_file", SeverityLevel.ERROR))
+        .isEqualTo(0);
+    // The notices merged earlier survive in the destination container.
+    assertThat(container.getValidationNotices()).containsExactly(notice);
+    assertThat(container.getNoticeCount("missing_required_file", SeverityLevel.ERROR)).isEqualTo(1);
+  }
+
+  /** After a reset the container must be as good as new, limits included. */
+  @Test
+  public void reset_restoresTheRetentionCapacity() {
+    NoticeContainer container = new NoticeContainer(10, 1, 10);
+    container.addValidationNotice(new StringFieldNotice("first"));
+    container.addValidationNotice(new StringFieldNotice("dropped"));
+    assertThat(container.getValidationNotices()).hasSize(1);
+
+    container.reset();
+    ValidationNotice afterReset = new StringFieldNotice("after reset");
+    container.addValidationNotice(afterReset);
+
+    assertThat(container.getValidationNotices()).containsExactly(afterReset);
+  }
+
+  @Test
   public void getNoticeCount_countsDroppedNoticesToo() {
     NoticeContainer container = new NoticeContainer(1_000, 2, 2);
     for (int i = 0; i < 10; i++) {

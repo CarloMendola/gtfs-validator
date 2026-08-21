@@ -202,6 +202,23 @@ public class NoticeContainer {
     hasValidationWarnings |= otherContainer.hasValidationWarnings;
   }
 
+  /**
+   * Empties this container so that it can be used again.
+   *
+   * <p>This is meant for the row-by-row parsing loop, which merges one container per row into the
+   * container of the table: allocating a container per row of a file with millions of rows is a
+   * significant share of the garbage produced while loading a feed. {@link #addAll} copies the
+   * notices into the destination container, so resetting the source afterwards is safe.
+   */
+  public void reset() {
+    validationNotices.clear();
+    systemErrors.clear();
+    noticesCountPerTypeAndSeverity.clear();
+    retainedNoticesCountPerTypeAndSeverity.clear();
+    hasValidationErrors = false;
+    hasValidationWarnings = false;
+  }
+
   /** Tells if this container has any {@code ValidationNotice} that is an error. */
   public boolean hasValidationErrors() {
     return hasValidationErrors;
