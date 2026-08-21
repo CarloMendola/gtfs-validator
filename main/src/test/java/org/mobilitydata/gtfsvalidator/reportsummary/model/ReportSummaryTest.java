@@ -101,6 +101,39 @@ public class ReportSummaryTest {
   }
 
   @Test
+  public void noticesMapTest_isTruncatedButCountsAreNot() {
+    NoticeContainer noticeContainer = new NoticeContainer();
+    int noticeCount = 3 * ReportSummary.MAX_NOTICES_PER_CODE;
+    for (int i = 1; i <= noticeCount; i++) {
+      noticeContainer.addValidationNotice(new MissingRequiredFieldNotice("test.txt", i, "field"));
+    }
+    ReportSummary reportSummary = new ReportSummary(noticeContainer, VersionInfo.empty());
+
+    assertEquals(
+        ReportSummary.MAX_NOTICES_PER_CODE,
+        reportSummary
+            .getNoticesMap()
+            .get(SeverityLevel.ERROR)
+            .get(MISSING_REQUIRED_FIELD_NOTICE_CODE)
+            .size());
+    assertEquals(
+        noticeCount,
+        reportSummary.getNoticeCountForCode(
+            SeverityLevel.ERROR, MISSING_REQUIRED_FIELD_NOTICE_CODE));
+    assertEquals(noticeCount, reportSummary.getNoticeCount());
+    assertEquals(noticeCount, reportSummary.getErrorCount());
+  }
+
+  @Test
+  public void noticeCountForCodeTest_unknownCode() {
+    assertEquals(0, generateReportSummary().getNoticeCountForCode(SeverityLevel.ERROR, "unknown"));
+    assertEquals(
+        0,
+        generateReportSummary()
+            .getNoticeCountForCode(SeverityLevel.INFO, MISSING_REQUIRED_FIELD_NOTICE_CODE));
+  }
+
+  @Test
   public void testVersionPresent() {
     VersionInfo versionInfo = VersionInfo.create(Optional.of("1.2.3"), Optional.of("1.2.4"));
     ReportSummary reportSummary = new ReportSummary(new NoticeContainer(), versionInfo);
