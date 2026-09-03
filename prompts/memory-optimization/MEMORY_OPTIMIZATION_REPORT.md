@@ -61,6 +61,24 @@ smallest round heap the *current release* can run this feed in. GC counts and pa
 identified. They establish the direction and order of magnitude. The project's acceptance-test run
 over the reference corpus is the check that should gate merging — see §7.
 
+**Also measured on the feed that motivated the work.** The CTA Chicago GTFS (95 MB zip, 413 MB of
+CSV, 355 MB of it `stop_times.txt`; 100 287 trips, 11 150 stops, 1439 shapes, 168 443 notices) is
+the feed whose validation was killed in a 3 GB container. It exercises a different amplifier mix
+from the synthetic feed: the cost there is the volume of entities and the composite-key index maps
+of M-01, not a notice explosion. Same method, same machine, JDK 17, Serial GC:
+
+| Measurement | `master` | with this work |
+|---|---:|---:|
+| Smallest `-Xmx` in which the feed validates | **1616 MB** (fails at 1524 MB) | **278 MB** (fails at 256 MB) |
+| Validation time, both at `-Xmx8g` | 42.2 s | 22.8-29.5 s over four runs |
+| GC pause total during the run, at `-Xmx8g` | 6.98 s | 1.79-1.95 s |
+| `report.html` written to disk | 6 587 188 B | 272 071 B |
+| `notices` object of `report.json` | identical | identical |
+
+The `notices` object is identical to `master` on this feed: its 168 443 notices are all well below
+the retention limits, so nothing is truncated. The truncation described in §5.1 only appears on the
+pathological feeds that produce hundreds of thousands of notices of one type.
+
 ---
 
 ## 3. Phase 1 — reducing the live set
@@ -447,8 +465,12 @@ surface of the generated classes is unchanged.
 - **Adversarial review of the diff**, which is how the count inconsistency of §5.2 was found — it was
   not caught by any test, before or after.
 - `./gradlew spotlessCheck` and `./gradlew assemble` are green.
-- **The split into six pull requests was measured, not assumed.** A CLI jar built from the six
-  branches and one built from the original single branch were run on the same 46 MB synthetic feed
+- **The split into six pull requests was measured, not assumed.** On the CTA Chicago feed the two
+  builds give the same smallest `-Xmx` at every probe of the bisection (256 MB fails, 278 MB
+  succeeds, for both), the same GC counts, validation times inside each other's run-to-run spread,
+  and a `report.html` that differs by one line: the generation timestamp. A CLI jar built from the
+  six branches and one built from the original single branch were also run on the same 46 MB
+  synthetic feed
   (800 000 whitespace notices, 200 000 `stop_too_far_from_shape`): the `notices` object of
   `report.json` is identical, `report.html` is byte-identical in size and heading, wall clock is
   9.4 s against 9.5 s over four interleaved runs each (inside the run-to-run spread of either
