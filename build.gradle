@@ -37,11 +37,14 @@ plugins {
 
 // Setup and configure properties that are consistent across all projects, including sub-modules.
 allprojects {
-    group 'org.mobilitydata.gtfs-validator'
+    group 'io.github.carlomendola'
 
     // Per the axion-release plugin, this computes the project version based
     // on the most recent tag in the repo.
-    version scmVersion.version
+    // forcedVersion lets a manual publish set an exact, deterministic version string
+    // (e.g. 8.0.1-cm.1) without fighting axion-release's own snapshot detection, which
+    // always appends "-SNAPSHOT" unless HEAD sits exactly on a matching version tag.
+    version project.hasProperty('forcedVersion') ? project.property('forcedVersion') : scmVersion.version
 
     repositories {
         mavenCentral()
@@ -141,25 +144,25 @@ subprojects {
                         // Definition of the pom that will be included with the uploaded artifacts.
                         pom {
                             name = fullProjectName
-                            description = 'The ' + project.name + " artifacts from the gtfs validator"
-                            url = 'https://github.com/MobilityData/gtfs-validator'
+                            description = 'The ' + project.name + " artifacts from the gtfs validator (CarloMendola fork, with memory-optimization patches)"
+                            url = 'https://github.com/CarloMendola/gtfs-validator'
                             licenses {
                                 license {
                                     name = 'The Apache License, Version 2.0'
-                                    url = 'https://github.com/MobilityData/gtfs-validator/blob/master/LICENSE'
+                                    url = 'https://github.com/CarloMendola/gtfs-validator/blob/master/LICENSE'
                                 }
                             }
                             developers {
                                 developer {
-                                    id = 'dev'
-                                    name = 'Dev group'
-                                    email = 'it@mobilitydata.org'
+                                    id = 'carlomendola'
+                                    name = 'Carlo Mendola'
+                                    email = '1311534+CarloMendola@users.noreply.github.com'
                                 }
                             }
                             scm {
-                                connection = 'scm:git:git://github.com/MobilityData/gtfs-validator.git'
-                                developerConnection = 'scm:git:ssh://github.com/MobilityData/gtfs-validator.git'
-                                url = 'https://github.com/MobilityData/gtfs-validator'
+                                connection = 'scm:git:git://github.com/CarloMendola/gtfs-validator.git'
+                                developerConnection = 'scm:git:ssh://github.com/CarloMendola/gtfs-validator.git'
+                                url = 'https://github.com/CarloMendola/gtfs-validator'
                             }
                         }
                     }
