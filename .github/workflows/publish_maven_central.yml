@@ -1,0 +1,61 @@
+name: Publish to Maven Central
+
+# Manual, on-demand publish of core/main/model to Maven Central under the
+# io.github.carlomendola namespace. Triggered by hand (not on every push/tag)
+# so a release is a deliberate, reviewed action - Maven Central releases
+# cannot be deleted or altered once published.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   MAVEN_CENTRAL_PORTAL_TOKEN_USERNAME
+#   MAVEN_CENTRAL_PORTAL_TOKEN_PASSWORD
+#   MAVEN_GPG_PRIVATE_KEY
+#   MAVEN_GPG_PASSPHRASE
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 8.0.1-cm.1). Append -SNAPSHOT to do a reversible dry run against the snapshot repository instead of a real release.'
+        required: true
+
+env:
+  java_version: '17'
+  java_distribution: 'zulu'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.java_version }}-${{ env.java_distribution }}
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.java_version }}
+          distribution: ${{ env.java_distribution }}
+
+      - name: Publish snapshot (dry run)
+        if: endsWith(inputs.version, '-SNAPSHOT')
+        env:
+          MAVEN_CENTRAL_PORTAL_TOKEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_PORTAL_TOKEN_USERNAME }}
+          MAVEN_CENTRAL_PORTAL_TOKEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PORTAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: ./gradlew publishToSnapshotRepository -PforcedVersion=${{ inputs.version }}
+
+      - name: Publish release to Maven Central
+        if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
+        env:
+          MAVEN_CENTRAL_PORTAL_TOKEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_PORTAL_TOKEN_USERNAME }}
+          MAVEN_CENTRAL_PORTAL_TOKEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PORTAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          # publishingType=USER_MANAGED (see scripts/publish_to_maven_central.sh): artifacts are
+          # uploaded and validated but stay in draft. Go to
+          # https://central.sonatype.com/publishing/deployments to inspect and release them,
+          # or drop them if something looks wrong. Once released, they cannot be removed or altered.
+          ./gradlew publishToMavenCentral -PforcedVersion=${{ inputs.version }}
