@@ -35,6 +35,13 @@ change is deliberate and documented in §5; one further difference is a bug fix,
 | `report.html` written to disk | 32.9 MiB | 0.29 MiB |
 | `notices` object of `report.json` | identical | identical |
 
+**Re-measured on 2026-10-14** with the pass criterion of §2, on a feed regenerated to the same
+description (44 MB of CSV; the original file was not kept): the smallest heap is **2184 MB before and
+118 MB after**, the whole run at `-Xmx2560m` takes 51.1 s and 20.6 s, and garbage collection 17.3 s
+and 0.20 s. The regenerated feed spends about 19 s more in CPU-bound multi-file validation, the same
+in every build, so its absolute times are longer than the ones above; the time saved, about 30 s, is
+the same.
+
 ---
 
 ## 2. How the measurements were taken
@@ -43,6 +50,14 @@ change is deliberate and documented in §5; one further difference is a bug fix,
 reference feed completes successfully*, found by binary search. This is a whole-system number that
 does not depend on a profiler's accounting, and it is the number that decides whether the library
 fits in a given container. It was re-measured after each phase.
+
+**What counts as completing successfully.** The JVM runs with `-XX:+UseSerialGC
+-XX:+ExitOnOutOfMemoryError` and must exit 0 within 300 s with an empty `system_errors.json`. Exit
+code 0 alone is not enough: the validator catches an `OutOfMemoryError` raised while a table is
+loaded, records it in `system_errors.json`, and goes on to write a report for a feed whose largest
+file was never loaded. Near the limit Serial GC can also thrash for minutes instead of failing, hence
+the time limit. The CTA Chicago figures below were first taken without these checks and were wrong;
+they have been corrected.
 
 **Reference feed.** A synthetic feed of 52 MB of CSV: 800 000 rows in `stop_times.txt`, 300 000
 points in `shapes.txt`, 8 000 trips, 2 000 stops, 1 000 shapes. Every `stop_times.txt` row carries a
@@ -62,21 +77,28 @@ identified. They establish the direction and order of magnitude. The project's a
 over the reference corpus is the check that should gate merging — see §7.
 
 **Also measured on the feed that motivated the work.** The CTA Chicago GTFS (95 MB zip, 413 MB of
-CSV, 355 MB of it `stop_times.txt`; 100 287 trips, 11 150 stops, 1439 shapes, 168 443 notices) is
-the feed whose validation was killed in a 3 GB container. It exercises a different amplifier mix
-from the synthetic feed: the cost there is the volume of entities and the composite-key index maps
-of M-01, not a notice explosion. Same method, same machine, JDK 17, Serial GC:
+CSV, 355 MB of it `stop_times.txt`; 100 287 trips, 11 150 stops, 1439 shapes) is the feed whose
+validation was killed in a 3 GB container. It exercises a different amplifier mix from the synthetic
+feed: the cost there is the volume of entities and the composite-key index maps of M-01, not a
+notice explosion. Same method, same machine, JDK 17, Serial GC, measured on 2026-10-14 against
+`master` at `20338457`; the six pull requests of §8 merged with that `master` give the same figures
+as this branch:
 
 | Measurement | `master` | with this work |
 |---|---:|---:|
-| Smallest `-Xmx` in which the feed validates | **1616 MB** (fails at 1524 MB) | **278 MB** (fails at 256 MB) |
-| Validation time, both at `-Xmx8g` | 42.2 s | 22.8-29.5 s over four runs |
-| GC pause total during the run, at `-Xmx8g` | 6.98 s | 1.79-1.95 s |
-| `report.html` written to disk | 6 587 188 B | 272 071 B |
+| Smallest `-Xmx` in which the feed validates | **1744 MB** (fails at 1736 MB) | **774 MB** (fails at 768 MB) |
+| Whole run, both at `-Xmx2560m`, mean of three | 32.7 s | 23.1 s |
+| GC pause total during the run, at `-Xmx2560m` | 8.1 s | 1.6 s |
+| `report.html` written to disk | 10 422 598 B | 298 370 B |
 | `notices` object of `report.json` | identical | identical |
 
-The `notices` object is identical to `master` on this feed: its 168 443 notices are all well below
-the retention limits, so nothing is truncated. The truncation described in §5.1 only appears on the
+**Correction.** An earlier version of this table gave 1616 MB and 278 MB. The 278 MB run had exited
+0 after catching an `OutOfMemoryError` while loading `stop_times.txt`, so the feed had not been
+validated. With the criterion above the heap needed on this feed drops by a factor of 2.25, not 6.
+
+The `notices` object is identical to `master` on this feed: its 268 733 notices (168 443 on the older
+`master` first measured, before validators were added) are all well below the retention limits, so
+nothing is truncated. The truncation described in §5.1 only appears on the
 pathological feeds that produce hundreds of thousands of notices of one type.
 
 ---
@@ -466,17 +488,18 @@ surface of the generated classes is unchanged.
   not caught by any test, before or after.
 - `./gradlew spotlessCheck` and `./gradlew assemble` are green.
 - **The split into six pull requests was measured, not assumed.** On the CTA Chicago feed the two
-  builds give the same smallest `-Xmx` at every probe of the bisection (256 MB fails, 278 MB
-  succeeds, for both), the same GC counts, validation times inside each other's run-to-run spread,
+  builds give the same smallest `-Xmx` at every probe of the bisection (774 MB passes and 768 MB
+  fails for both, with the criterion of §2), the same GC counts, validation times inside each other's run-to-run spread,
   and a `report.html` that differs by one line: the generation timestamp. A CLI jar built from the
   six branches and one built from the original single branch were also run on the same 46 MB
   synthetic feed
   (800 000 whitespace notices, 200 000 `stop_too_far_from_shape`): the `notices` object of
   `report.json` is identical, `report.html` is byte-identical in size and heading, wall clock is
   9.4 s against 9.5 s over four interleaved runs each (inside the run-to-run spread of either
-  build), garbage collections 15 and pause totals 190-202 ms on both, and the smallest `-Xmx` in
-  which the feed validates is **51 MB for both**, against 2796 MB for `master` on the same feed. The
-  only behavioural difference between the two builds is the cache implementation described in M-04
+  build), garbage collections 15 and pause totals 190-202 ms on both. Re-measured on 2026-10-14
+  with the criterion of §2, on the regenerated feed of §1, the smallest `-Xmx` in which the feed
+  validates is **118 MB for both** (112 MB fails), against 2184 MB for `master`; the figures first
+  given here, 51 MB and 2796 MB, were taken without those checks. The only behavioural difference between the two builds is the cache implementation described in M-04
   and M-11.
 
 **Still owed before merging:**
